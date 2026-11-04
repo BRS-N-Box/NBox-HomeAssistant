@@ -13,7 +13,7 @@
   <a href="https://hacs.xyz"><img alt="HACS custom repository" src="https://img.shields.io/badge/HACS-Custom-orange.svg"></a>
   <img alt="Home Assistant" src="https://img.shields.io/badge/Home%20Assistant-Matter-41BDF5.svg">
   <img alt="IoT class" src="https://img.shields.io/badge/iot__class-local__push-green.svg">
-  <img alt="Version" src="https://img.shields.io/badge/version-3.0.0-informational.svg">
+  <img alt="Version" src="https://img.shields.io/badge/version-3.0.1-informational.svg">
   <img alt="License" src="https://img.shields.io/badge/license-MIT-blue.svg">
 </p>
 
@@ -78,7 +78,7 @@ Copy `custom_components/nbox_matter` into your Home Assistant `config/custom_com
 ## Setup
 
 1. Pair the N-Box with Home Assistant through **Matter** (it must appear in the Matter integration).
-2. **Settings → Devices & Services → Add Integration → N-Box Matter Extension → Submit.**
+2. **Settings → Devices & Services → Add Integration → N-Box Matter → Submit.**
 
 That is all. The screen tells you whether an N-Box was found; if it is not paired yet, the integration
 waits and picks it up as soon as it is.

@@ -1,5 +1,8 @@
 # Changelog
 
+## 3.0.1
+- The integration is now simply called **N-Box Matter** (the word "Extension" is gone from the name).
+
 ## 3.0.0 – self-healing
 
 The integration now finds the N-Box by itself and keeps working when the N-Box is removed and paired again.
