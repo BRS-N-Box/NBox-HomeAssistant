@@ -28,6 +28,10 @@ The integration now finds the N-Box by itself and keeps working when the N-Box i
   still used once, to clean up its leftovers).
 - Debug logging of every received message (`custom_components.nbox_matter: debug`), sensor attribute `matter_node_id`.
 
+### Fixed
+- **Missing integration icon.** Home Assistant 2026.3+ reads icons from `custom_components/nbox_matter/brand/`
+  (`icon.png` 256x256 and `icon@2x.png` 512x512, square). The old install had its images in the wrong place and shape.
+
 ### Removed
 - Moving the Matter light entities into the integration's own devices ("entity kidnapping"), the source of the
   orphaned `unavailable` lights after re-pairing.
