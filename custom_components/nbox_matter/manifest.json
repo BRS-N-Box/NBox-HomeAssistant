@@ -1,7 +1,7 @@
 {
   "domain": "nbox_matter",
   "name": "N-Box Matter Extension",
-  "version": "2.0.6",
+  "version": "3.0.0",
   "documentation": "https://github.com/kitsuneb2/NBox-HomeAssistant",
   "issue_tracker": "https://github.com/kitsuneb2/NBox-HomeAssistant/issues",
   "dependencies": ["matter"],

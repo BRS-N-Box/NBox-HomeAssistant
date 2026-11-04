@@ -6,13 +6,14 @@
 
 <p align="center">
   <b>Your phone's notifications — who sent them, from which app, and what they say — as Home Assistant sensors.</b><br>
-  Android and iOS, delivered over <b>Matter</b>. No cloud, no polling, no accounts.
+  Android and iOS, delivered over <b>Matter</b>. No cloud, no polling, no accounts, and no setup to repeat when you pair the device again.
 </p>
 
 <p align="center">
   <a href="https://hacs.xyz"><img alt="HACS custom repository" src="https://img.shields.io/badge/HACS-Custom-orange.svg"></a>
   <img alt="Home Assistant" src="https://img.shields.io/badge/Home%20Assistant-Matter-41BDF5.svg">
   <img alt="IoT class" src="https://img.shields.io/badge/iot__class-local__push-green.svg">
+  <img alt="Version" src="https://img.shields.io/badge/version-3.0.0-informational.svg">
   <img alt="License" src="https://img.shields.io/badge/license-MIT-blue.svg">
 </p>
 
@@ -43,11 +44,13 @@ flowchart LR
 ## Features
 
 - **Sender, app and content as sensors** for each of the four LED channels (12 sensors).
-- **Local push**: the N-Box reports over Matter; nothing leaves your network.
+- **Self-healing.** The N-Box is found automatically. Remove it and pair it again — new node number, new
+  entities — and the integration switches over by itself and tidies up what the old pairing left behind.
+- **Instant.** It subscribes to the Matter server, so a message shows up the moment the N-Box reports it.
+- **Local push**: nothing leaves your network.
 - **Works with iOS and Android** — the phone side lives in the N-Box and its companion app; Home Assistant
   sees the same data either way.
-- **One device per LED channel** (*N-Box LED 1…4*), with the matching Matter light grouped into it.
-- **Configurable from the UI**: Matter node and the light that signals each LED; a *scan* button finds the node number for you.
+- **Nothing to configure**: one confirmation at setup. Optional pin-to-node and clean-up switch in *Configure*.
 - Pure Python, no extra requirements, no YAML.
 
 ## Requirements
@@ -55,7 +58,7 @@ flowchart LR
 | What | Notes |
 |---|---|
 | Home Assistant with the **Matter** integration | Required dependency (`dependencies: ["matter"]`) |
-| An **N-Box** commissioned into Home Assistant through Matter | It shows up as four *Light* entities (one per LED channel) |
+| An **N-Box** commissioned into Home Assistant through Matter | It shows up as a *N-Box* device with four *Light* entities |
 | The phone side | Android companion app, or iOS notifications through ANCS |
 
 > The N-Box firmware (ESP-IDF + ESP-Matter) and the Android companion app are separate projects by the
@@ -74,22 +77,34 @@ Copy `custom_components/nbox_matter` into your Home Assistant `config/custom_com
 
 ## Setup
 
-1. Pair the N-Box with Home Assistant through **Matter** first (it must appear in the Matter integration).
-2. **Settings → Devices & Services → Add Integration → N-Box Matter Extension.**
-3. The form asks for:
+1. Pair the N-Box with Home Assistant through **Matter** (it must appear in the Matter integration).
+2. **Settings → Devices & Services → Add Integration → N-Box Matter Extension → Submit.**
 
-   | Field | Meaning |
-   |---|---|
-   | **Matter Node ID** | Node number of the N-Box in the Matter server (auto-filled when it can be discovered) |
-   | **LED 1–4 Trigger Entity** | The Matter *Light* that goes **on** when a notification arrives for that LED (default `light.n_box_light_1` … `_4`) |
+That is all. The screen tells you whether an N-Box was found; if it is not paired yet, the integration
+waits and picks it up as soon as it is.
 
-4. To change them later: **Configure** on the integration. Tick **Auto-Discover Node ID** and submit to scan, then submit again to save.
+**Upgrading from 2.x:** just update and restart. The old node number and trigger-light options are not needed
+any more and are dropped on first start; lights that 2.x had pulled into its own devices are moved back to
+the N-Box's Matter device.
 
-### How the node number is found
+### Options (Configure)
 
-The N-Box's Matter light belongs to a device whose Matter identifier ends in the node number as hex
-(for example `…-000000000000007F-…` = node **127**). The integration looks at the trigger light, reads that
-identifier and converts it.
+| Option | Meaning |
+|---|---|
+| **Matter node number** | `0` = detect automatically (recommended). Set a number only if you own several N-Boxes and want to pin one. |
+| **Auto cleanup** | On by default. Removes the leftover entities (and empty devices) of N-Box nodes that no longer exist after a re-pairing. Only nodes this integration recognised as an N-Box are ever touched. |
+
+## How it finds and follows the N-Box
+
+1. It looks through the Matter nodes for one that **is** an N-Box: vendor `BRS-L`, product `N-Box` (or the
+   vendor/product ids `0xFFF2`/`0x8001`; as a fallback, a node publishing the Messages cluster on several endpoints).
+2. It subscribes to that node's *Messages* attribute on endpoints 1–4 and reads the current values.
+3. It also listens for Matter nodes being added, updated or removed. If the N-Box is removed and paired again, the
+   integration picks the new node, resubscribes, re-reads all channels, moves any light that an older version
+   had pulled into its devices back to Matter, and (unless switched off) removes the leftovers of the old node.
+4. A safety re-read runs every minute.
+
+If more than one N-Box is paired, the available one is used, preferring the newest — or pin one in *Configure*.
 
 ## Entities
 
@@ -101,8 +116,12 @@ For every LED channel `N` = 1…4:
 | `sensor.n_box_ledN_app` | `WhatsApp` |
 | `sensor.n_box_ledN_content` | `Running late, start without me` |
 
-Before the first message the sensors show `Waiting for data...`; a cleared notification shows `None`.
-The sensors are grouped into a device called **N-Box LED N**.
+- `Waiting for data...` – an N-Box was found but has not reported a message on this channel yet.
+- `None` – the notification was cleared.
+- `unavailable` – there is no N-Box on Matter, or its node is offline.
+- Attribute `matter_node_id` – the Matter node currently in use.
+
+The sensors are grouped into devices called **N-Box LED N**. Entity ids and unique ids are the same as in 2.x.
 
 ## The message format
 
@@ -113,17 +132,16 @@ The N-Box publishes the **Matter Messages cluster** (`0x0097`, cluster 151) on e
 sender|app|content
 ```
 
-and `None|None|None` when the notification is cleared. The integration splits that string into the three
-sensors. Only the first two `|` are separators, so message text may contain `|` itself.
+and an empty list (or `None|None|None`) when the notification is cleared. The integration splits that string
+into the three sensors. Only the first two `|` are separators, so message text may contain `|` itself.
+The N-Box may shorten long names and texts before sending them.
 
 ## Timing
 
-1. A notification arrives: the N-Box toggles the LED's light **off → on** (so Home Assistant always sees a
-   state change) and then updates the message text.
-2. When the trigger light turns on, the integration waits **1 second** and then reads the Messages attribute
-   from the Matter node. It also reads once at start-up.
-
-In your automations, trigger on the **light** and give the sensors a moment (2–3 s) before reading them.
+A notification arrives: the N-Box toggles the LED's light **off → on** (so Home Assistant always sees a state
+change) and updates the message text. The sensors update as soon as the N-Box reports the text — typically
+within a fraction of a second of the light changing. In an automation that triggers on the light, a short
+`delay` (1–2 s) before reading the sensors is a cheap way to be sure they are up to date.
 
 ## Automation examples
 
@@ -136,7 +154,7 @@ triggers:
     entity_id: light.n_box_light_1
     to: "on"
 actions:
-  - delay: "00:00:03"            # let the sensors update (the integration reads after 1 s)
+  - delay: "00:00:02"            # let the sensors update
   - variables:
       app: "{{ states('sensor.n_box_led1_app') }}"
       sender: "{{ states('sensor.n_box_led1_sender') }}"
@@ -148,11 +166,22 @@ actions:
         New {{ app }}{{ ' from ' ~ sender if sender not in ['Unknown', 'None'] else '' }}
 ```
 
+**Trigger straight on the message (no light needed)**
+
+```yaml
+triggers:
+  - trigger: state
+    entity_id: sensor.n_box_led1_content
+conditions:
+  - condition: template
+    value_template: "{{ trigger.to_state.state not in ['None', 'unavailable', 'unknown', 'Waiting for data...'] }}"
+```
+
 **Different reaction per app**
 
 ```yaml
 actions:
-  - delay: "00:00:03"
+  - delay: "00:00:02"
   - choose:
       - conditions: "{{ is_state('sensor.n_box_led1_app', 'WhatsApp') }}"
         sequence:
@@ -172,27 +201,32 @@ actions:
 
 ## Troubleshooting
 
-| Symptom | Likely cause |
+| Symptom | What to check |
 |---|---|
-| Sensors stay at `Waiting for data...` | The Matter **node ID** in the settings is not the N-Box's current node, or the node is offline. |
-| The same old app keeps being announced | The trigger lights in the settings are not the live ones (for example **unavailable leftovers** of a removed N-Box), so the sensors are never refreshed. |
-| Settings point at nothing after re-pairing | Removing and pairing the N-Box again gives it a **new node number** and new light entities. Update the integration's node ID and trigger lights (see Setup). |
-| Nothing in the log | By design the integration only logs setup steps (as `[NBOX]` / `[NBOX DISCOVERY]`) and read failures at debug level. See the roadmap. |
+| Sensors are `unavailable` | No N-Box is paired on Matter, or its node is offline. Check **Settings → Devices & Services → Matter**. |
+| Sensors stay at `Waiting for data...` | The N-Box is found but has not reported a message yet. Send yourself a notification on a phone that is connected to it. |
+| I paired the N-Box again | Nothing to do — it is picked up automatically (watch the log for `[NBOX] Using N-Box on Matter node …`). |
+| Leftover `unavailable` lights from an old pairing | Enabled by default: they are removed automatically. If *Auto cleanup* is off, delete them by hand. |
+| Nothing is announced although the sensors look right | Check the rest of your automation (for example the text-to-speech or media player step); the integration only provides the sensors. |
 
-To see what exists, open **Settings → Devices & Services → Matter**, find the N-Box and check its node
-number in the device info.
+### Seeing what is received
 
-## Known limitations and roadmap
+Add this to `configuration.yaml` and restart (or use the *Set log level* action):
 
-This is a young integration that grew with the hardware. Planned work:
+```yaml
+logger:
+  logs:
+    custom_components.nbox_matter: debug
+```
 
-- [ ] **Automatic re-discovery when the N-Box is paired again** (new node number, new light entities), without touching the settings.
-- [ ] Discovery that ignores orphaned entities and prefers the **available** Matter lights.
-- [ ] **Subscribe to Matter attribute updates** instead of reading 1 s after the light changes (no timing race, no dependency on the trigger light).
-- [ ] Log the **raw message** received and the three parts, at debug level, for easy diagnosis.
+Every message is then logged as `[NBOX] EPn (update|read): sender=… app=… content=…`, together with the node
+selection and clean-up steps. Setup and node changes are logged at info level as `[NBOX] …`.
+
+## Roadmap
+
 - [ ] An **event entity** per LED, so automations can trigger directly on a received message.
-- [ ] Clean entity names without numeric suffixes after re-installation.
-- [ ] Translations, tests and a diagnostics download.
+- [ ] Repairs issue when no N-Box is found for a long time.
+- [ ] Translations, a test suite in CI and a diagnostics download.
 
 Ideas and bug reports are very welcome — open an issue.
 
