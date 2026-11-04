@@ -1,0 +1,35 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "N-Box Matter Setup",
+        "description": "Auto-Discovery: Searching for your paired N-Box (Searching for Node ID).\n\n!.",
+        "data": {
+          "node_id": "Matter Node ID",
+          "trigger_led1": "LED 1 Trigger Entity",
+          "trigger_led2": "LED 2 Trigger Entity",
+          "trigger_led3": "LED 3 Trigger Entity",
+          "trigger_led4": "LED 4 Trigger Entity"
+        }
+      }
+    },
+    "error": {
+      "not_paired": "⚠️ N-Box device not found in Home Assistant. Make sure you pair your N-Box device with Matter first, or enter the Node ID manually."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Configure N-Box Sensors",
+        "data": {
+          "node_id": "Matter Node ID",
+          "trigger_led1": "LED 1 Trigger Entity",
+          "trigger_led2": "LED 2 Trigger Entity",
+          "trigger_led3": "LED 3 Trigger Entity",
+          "trigger_led4": "LED 4 Trigger Entity",
+          "auto_discover": "Auto-Discover Node ID (Click Submit to Scan)"
+        }
+      }
+    }
+  }
+}
