@@ -13,7 +13,7 @@
   <a href="https://hacs.xyz"><img alt="HACS custom repository" src="https://img.shields.io/badge/HACS-Custom-orange.svg"></a>
   <img alt="Home Assistant" src="https://img.shields.io/badge/Home%20Assistant-Matter-41BDF5.svg">
   <img alt="IoT class" src="https://img.shields.io/badge/iot__class-local__push-green.svg">
-  <img alt="Version" src="https://img.shields.io/badge/version-3.0.1-informational.svg">
+  <img alt="Version" src="https://img.shields.io/badge/version-3.0.2-informational.svg">
   <img alt="License" src="https://img.shields.io/badge/license-MIT-blue.svg">
 </p>
 
@@ -68,7 +68,7 @@ flowchart LR
 
 ### HACS (custom repository)
 
-1. HACS → ⋮ → **Custom repositories** → add `https://github.com/kitsuneb2/NBox-HomeAssistant`, category **Integration**.
+1. HACS → ⋮ → **Custom repositories** → add `https://github.com/BRS-N-Box/NBox-HomeAssistant`, category **Integration**.
 2. Download **N-Box Matter**, then restart Home Assistant.
 
 ### Manual

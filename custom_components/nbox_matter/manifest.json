@@ -1,9 +1,9 @@
 {
   "domain": "nbox_matter",
   "name": "N-Box Matter",
-  "version": "3.0.1",
-  "documentation": "https://github.com/kitsuneb2/NBox-HomeAssistant",
-  "issue_tracker": "https://github.com/kitsuneb2/NBox-HomeAssistant/issues",
+  "version": "3.0.2",
+  "documentation": "https://github.com/BRS-N-Box/NBox-HomeAssistant",
+  "issue_tracker": "https://github.com/BRS-N-Box/NBox-HomeAssistant/issues",
   "dependencies": ["matter"],
   "codeowners": ["@kitsuneb2"],
   "requirements": [],

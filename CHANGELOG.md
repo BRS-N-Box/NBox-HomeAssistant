@@ -1,5 +1,9 @@
 # Changelog
 
+## 3.0.2
+- The repository moved to the **BRS-N-Box** GitHub organization; documentation and issue links updated. If HACS
+  cannot find the repository any more, remove the old custom repository and add `https://github.com/BRS-N-Box/NBox-HomeAssistant`.
+
 ## 3.0.1
 - The integration is now simply called **N-Box Matter** (the word "Extension" is gone from the name).
 
