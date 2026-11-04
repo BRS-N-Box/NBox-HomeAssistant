@@ -19,7 +19,8 @@ The integration now finds the N-Box by itself and keeps working when the N-Box i
 
 ### Added
 - **Self-healing of the registry.**
-  - Matter lights that v2 had pulled into its own "N-Box LED n" devices are moved back to the N-Box's Matter device.
+  - Matter lights that v2 had pulled into its own "N-Box LED n" devices (or that were left without any device when
+    v2 was removed) are moved back to the N-Box's Matter device.
   - Leftover Matter entities (and empty devices) of N-Box nodes that no longer exist are removed. Only nodes the
     integration itself recognised as an N-Box are ever touched; other Matter devices are never affected.
     Switch it off with the **auto cleanup** option.

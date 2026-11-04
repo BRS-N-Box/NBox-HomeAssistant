@@ -455,7 +455,9 @@ class NBoxManager:
             return
         matter_device = counts.most_common(1)[0][0]
         for entry in matter_entries:
-            if entry.device_id in ours:
+            # in one of our devices (older version), or with no device at all (its device
+            # was removed together with the older version)
+            if entry.device_id is None or entry.device_id in ours:
                 _LOGGER.info("[NBOX] Moving %s back to its Matter device", entry.entity_id)
                 ent_reg.async_update_entity(entry.entity_id, device_id=matter_device)
 
