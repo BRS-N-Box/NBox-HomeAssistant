@@ -93,6 +93,7 @@ the N-Box's Matter device.
 |---|---|
 | **Matter node number** | `0` = detect automatically (recommended). Set a number only if you own several N-Boxes and want to pin one. |
 | **Auto cleanup** | On by default. Removes the leftover entities (and empty devices) of N-Box nodes that no longer exist after a re-pairing. Only nodes this integration recognised as an N-Box are ever touched. |
+| **Process LED 1-4 messages** | On by default. Switch a channel off and it fires no `nbox_matter_message` events (its sensors still update). |
 
 ## How it finds and follows the N-Box
 
@@ -120,6 +121,7 @@ For every LED channel `N` = 1…4:
 - `None` – the notification was cleared.
 - `unavailable` – there is no N-Box on Matter, or its node is offline.
 - Attribute `matter_node_id` – the Matter node currently in use.
+- Attribute `message_id` – the notification ID of the message on this channel (16 hex characters), or `null` when the N-Box sends none.
 
 The sensors are grouped into devices called **N-Box LED N**. Entity ids and unique ids are the same as in 2.x.
 
@@ -135,6 +137,69 @@ sender|app|content
 and an empty list (or `None|None|None`) when the notification is cleared. The integration splits that string
 into the three sensors. Only the first two `|` are separators, so message text may contain `|` itself.
 The N-Box may shorten long names and texts before sending them.
+
+## Announce each notification only once (`nbox_matter_message` event)
+
+Triggering on the light (or on a sensor) cannot tell a **new** notification from one the phone only **re-sends**
+after it reconnects to the N-Box. With a firmware and phone app that send a notification ID, the integration can:
+
+- The N-Box publishes the ID as the Matter `messageID` of the message: **8 raw bytes**, shown here as 16 lowercase
+  hex characters. The same notification (same phone notification and post time) always has the same ID, also after a
+  Bluetooth reconnect. A new message in the same chat gets a new ID, even if the text is identical.
+- The integration remembers the last 200 IDs per LED channel (stored in `.storage`, so they survive a restart) and
+  fires **one** event per ID it has not seen yet:
+
+```yaml
+event_type: nbox_matter_message
+data:
+  endpoint: 1            # LED channel 1-4
+  id: "0123456789abcdef"
+  sender: Anna
+  app: WhatsApp
+  content: Running late, start without me
+  is_new: true
+```
+
+What does **not** fire an event:
+
+| Situation | Event |
+|---|---|
+| The phone reconnects and re-sends a notification it already sent (same ID) | no |
+| The N-Box reports "no ID" (older firmware, or an iOS phone: the legacy constant `"1"`) | no - the sensors still update exactly as before |
+| A cleared notification (`None\|None\|None`) | no |
+| The messages that are already on the N-Box when Home Assistant (or the integration) starts, or when a new N-Box node is paired | no - they are only remembered |
+| A channel switched off with *Process LED n messages* | no - the sensors still update |
+
+Notifications that arrive while Home Assistant is down are therefore never announced afterwards (they are treated as
+history). The same text from the same sender **does** fire again, because it has a new ID.
+
+Use the data **of the event** (not the sensors) in your automation: it is exactly the message that fired. Use
+`mode: queued` so that two new messages in a row are announced one after the other.
+
+```yaml
+alias: N-Box - announce new message (once per notification)
+mode: queued
+max: 10
+triggers:
+  - trigger: event
+    event_type: nbox_matter_message
+    # event_data:
+    #   endpoint: 1          # remove this line to react to all four channels
+actions:
+  - variables:
+      app: "{{ trigger.event.data.app }}"
+      sender: "{{ trigger.event.data.sender }}"
+  - action: tts.speak
+    target:
+      entity_id: tts.home_assistant_cloud
+    data:
+      media_player_entity_id: media_player.kitchen
+      message: >-
+        New "{{ app }}"{{ ' from "' ~ sender ~ '"' if sender not in ['Unknown', 'None', ''] else '' }}
+```
+
+Watch the events in *Developer tools -> Events* (listen to `nbox_matter_message`). With the debug log
+(`custom_components.nbox_matter: debug`) every decision is logged as `[NBOX] EPn id=... new=True/False`.
 
 ## Timing
 

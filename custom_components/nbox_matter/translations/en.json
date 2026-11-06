@@ -17,7 +17,11 @@
         "description": "{status}\n\nLeave the node number at 0 to detect the N-Box automatically.",
         "data": {
           "node_id": "Matter node number (0 = automatic)",
-          "auto_cleanup": "Remove leftover entities of N-Box nodes that were removed"
+          "auto_cleanup": "Remove leftover entities of N-Box nodes that were removed",
+          "process_led1": "Process LED 1 messages (fire nbox_matter_message events)",
+          "process_led2": "Process LED 2 messages (fire nbox_matter_message events)",
+          "process_led3": "Process LED 3 messages (fire nbox_matter_message events)",
+          "process_led4": "Process LED 4 messages (fire nbox_matter_message events)"
         }
       }
     }

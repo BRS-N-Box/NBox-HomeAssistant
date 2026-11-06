@@ -66,4 +66,7 @@ class NBoxMessagePartSensor(SensorEntity):
 
     @property
     def extra_state_attributes(self) -> dict:
-        return {"matter_node_id": self._manager.node_id}
+        return {
+            "matter_node_id": self._manager.node_id,
+            "message_id": self._manager.message_id(self._endpoint),
+        }

@@ -16,6 +16,8 @@ from .const import (
     CONF_NODE_ID,
     DEFAULT_AUTO_CLEANUP,
     DOMAIN,
+    LED_ENDPOINTS,
+    PROCESS_LED_KEYS,
 )
 from .manager import find_nbox_nodes, get_matter_client
 
@@ -73,6 +75,12 @@ class NBoxOptionsFlow(config_entries.OptionsFlow):
                     CONF_AUTO_CLEANUP,
                     default=options.get(CONF_AUTO_CLEANUP, DEFAULT_AUTO_CLEANUP),
                 ): bool,
+                **{
+                    vol.Optional(
+                        PROCESS_LED_KEYS[ep], default=options.get(PROCESS_LED_KEYS[ep], True)
+                    ): bool
+                    for ep in LED_ENDPOINTS
+                },
             }
         )
         return self.async_show_form(
