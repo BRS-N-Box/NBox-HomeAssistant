@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 3.1.0
 ### Added
 - **`nbox_matter_message` event: announce each notification once.** The N-Box (new firmware + Android app) publishes
   a notification ID as the Matter `messageID` (8 raw bytes). The integration remembers the last 200 IDs per LED

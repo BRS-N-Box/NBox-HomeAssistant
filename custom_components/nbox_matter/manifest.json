@@ -1,7 +1,7 @@
 {
   "domain": "nbox_matter",
   "name": "N-Box Matter",
-  "version": "3.0.2",
+  "version": "3.1.0",
   "documentation": "https://github.com/BRS-N-Box/NBox-HomeAssistant",
   "issue_tracker": "https://github.com/BRS-N-Box/NBox-HomeAssistant/issues",
   "dependencies": ["matter"],
