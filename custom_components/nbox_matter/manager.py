@@ -48,7 +48,18 @@ from .const import (
     NBOX_PRODUCT_NAME,
     NBOX_VENDOR_ID,
     NBOX_VENDOR_NAME,
+    EVENT_MESSAGE,
+    PROCESS_LED_KEYS,
     WAITING,
+)
+from .messages import (  # noqa: F401 - parse_* re-exported
+    Message,
+    SeenIds,
+    decide_event,
+    parse_message_id,
+    parse_message_text,
+    parse_messages_full,
+    parse_messages_value,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -57,40 +68,13 @@ _RETRY_SECONDS = 30
 _DEBOUNCE_SECONDS = 2
 _REFRESH_SECONDS = 60  # safety net: re-read everything now and then
 _REFRESH_SECONDS_NO_EVENTS = 15  # when the event subscription is not available
+_SAVE_SEEN_DELAY = 10  # seconds: debounce for saving the seen notification IDs
 
 
 # ---------------------------------------------------------------------------
-# Pure helpers (no Home Assistant needed - easy to test)
+# Pure helpers: the message parsing lives in messages.py (no Home Assistant needed).
+# parse_message_text / parse_messages_value are re-exported for existing callers.
 # ---------------------------------------------------------------------------
-def parse_message_text(text: Any) -> tuple[str, str, str]:
-    """Split "sender|app|content" (only the first two "|" separate)."""
-    parts = str(text).split("|", 2)
-    if len(parts) == 3:
-        return parts[0].strip(), parts[1].strip(), parts[2].strip()
-    # Not in the expected format: keep the text as the content
-    return "Unknown", "Unknown", str(text).strip()
-
-
-def parse_messages_value(value: Any) -> tuple[str, str, str] | None:
-    """Turn the Matter "Messages" attribute value into (sender, app, content).
-
-    * list with a message  -> the three parts
-    * empty list           -> notification cleared: ("None", "None", "None")
-    * anything else        -> None (unknown shape, ignore)
-    """
-    if not isinstance(value, (list, tuple)):
-        return None
-    if len(value) == 0:
-        return ("None", "None", "None")
-    struct = value[0]
-    text = getattr(struct, "messageText", None)
-    if text is None and isinstance(struct, dict):
-        text = struct.get("messageText") or struct.get("5") or struct.get(5)
-    if text is None:
-        return None
-    return parse_message_text(text)
-
-
 def _node_attr(node: Any, endpoint: int, cluster: int, attribute: int) -> Any:
     try:
         return node.get_attribute_value(endpoint, cluster, attribute)
@@ -178,7 +162,9 @@ class NBoxManager:
         self.entry = entry
         self.node_id: int | None = None
         self.node_available = False
-        self._messages: dict[int, tuple[str, str, str] | None] = {
+        # (sender, app, content, notification id): the ID is part of the comparison, so a
+        # new notification with identical text is not dropped as "unchanged".
+        self._messages: dict[int, Message | None] = {
             ep: None for ep in LED_ENDPOINTS
         }
         self._client: Any | None = None
@@ -191,6 +177,10 @@ class NBoxManager:
         self._stopped = False
         self._known_nodes: set[int] = set()
         self._store = Store(hass, 1, f"{DOMAIN}_{entry.entry_id}_known_nodes")
+        self._seen_store = Store(hass, 1, f"{DOMAIN}_{entry.entry_id}_seen_ids")
+        self._seen = SeenIds()
+        # The first read after a start / node switch only learns the IDs (no events)
+        self._silent_read = True
 
     # -- what the sensors read ---------------------------------------------
     @property
@@ -205,10 +195,20 @@ class NBoxManager:
         message = self._messages.get(endpoint)
         return message[index] if message else WAITING
 
+    def message_id(self, endpoint: int) -> str | None:
+        """Notification ID of the message on this endpoint (None = no ID)."""
+        message = self._messages.get(endpoint)
+        return message[3] if message else None
+
+    def _endpoint_enabled(self, endpoint: int) -> bool:
+        """Option "Process LED n messages" (default on, also for old entries)."""
+        return bool(self.entry.options.get(PROCESS_LED_KEYS[endpoint], True))
+
     # -- life cycle ----------------------------------------------------------
     async def async_start(self) -> None:
         data = await self._store.async_load() or {}
         self._known_nodes = {int(n) for n in data.get("known_nodes", [])}
+        self._seen = SeenIds.from_dict(await self._seen_store.async_load())
         # Settings of older versions are only used as hints of "this was an N-Box"
         for source in (self.entry.options, self.entry.data):
             hint = source.get(CONF_NODE_ID)
@@ -220,7 +220,8 @@ class NBoxManager:
         legacy_keys = (CONF_TRIGGER_LED1, CONF_TRIGGER_LED2, CONF_TRIGGER_LED3, CONF_TRIGGER_LED4)
         if any(key in self.entry.options for key in legacy_keys):
             _LOGGER.info("[NBOX] Migrating settings of an older version: the node and the trigger lights are now automatic")
-            kept = {k: v for k, v in self.entry.options.items() if k == CONF_AUTO_CLEANUP}
+            keep = {CONF_AUTO_CLEANUP, *PROCESS_LED_KEYS.values()}
+            kept = {k: v for k, v in self.entry.options.items() if k in keep}
             self.hass.config_entries.async_update_entry(self.entry, options=kept)
         await self._async_connect()
 
@@ -231,6 +232,7 @@ class NBoxManager:
                 cancel()
         self._cancel_retry = self._cancel_refresh = None
         self._unsubscribe_all()
+        await self._seen_store.async_save(self._seen.to_dict())  # flush the debounced save
 
     def _unsubscribe_all(self) -> None:
         for unsub in self._unsub_node_events + self._unsub_attr_events:
@@ -375,6 +377,7 @@ class NBoxManager:
                 f", was node {previous}" if previous is not None else "",
             )
             self._messages = {ep: None for ep in LED_ENDPOINTS}
+            self._silent_read = True  # new node: learn its IDs, do not announce them
             self._subscribe_messages(client, node.node_id)
 
         values_changed = self._read_all(node)
@@ -399,6 +402,8 @@ class NBoxManager:
     def _read_all(self, node: Any) -> bool:
         """Read the current messages of all LED endpoints. True if something changed."""
         changed = False
+        silent = self._silent_read
+        got_value = False
         for endpoint in LED_ENDPOINTS:
             try:
                 value = node.get_attribute_value(
@@ -409,24 +414,59 @@ class NBoxManager:
                 continue
             if value is None:
                 continue
-            changed |= self._apply_value(endpoint, value, "read", dispatch=False)
+            got_value = True
+            changed |= self._apply_value(
+                endpoint, value, "read", dispatch=False, silent=silent
+            )
+        if got_value:
+            self._silent_read = False  # history learned; from now on new IDs are announced
         return changed
 
-    def _apply_value(self, endpoint: int, value: Any, source: str, dispatch: bool = True) -> bool:
+    def _apply_value(
+        self,
+        endpoint: int,
+        value: Any,
+        source: str,
+        dispatch: bool = True,
+        silent: bool = False,
+    ) -> bool:
         if endpoint not in self._messages:
             return False
-        message = parse_messages_value(value)
+        message = parse_messages_full(value)
         if message is None:
             _LOGGER.debug("[NBOX] EP%s (%s): unexpected value %r", endpoint, source, value)
             return False
         if self._messages[endpoint] == message:
-            return False
+            return False  # same text and same ID: a replay, nothing to do
         self._messages[endpoint] = message
         _LOGGER.debug(
-            "[NBOX] EP%s (%s): sender=%r app=%r content=%r", endpoint, source, *message
+            "[NBOX] EP%s (%s): sender=%r app=%r content=%r", endpoint, source, *message[:3]
         )
+        _LOGGER.debug("[NBOX] EP%s raw message value: %r", endpoint, value)
+        fire = decide_event(
+            self._seen,
+            endpoint,
+            message,
+            enabled=self._endpoint_enabled(endpoint),
+            silent=silent,
+        )
+        if message[3] is not None:
+            _LOGGER.debug("[NBOX] EP%s id=%s new=%s", endpoint, message[3], fire)
+            self._seen_store.async_delay_save(self._seen.to_dict, _SAVE_SEEN_DELAY)
         if dispatch:
-            self._dispatch()
+            self._dispatch()  # sensors first, so an automation reads current values
+        if fire:
+            self.hass.bus.async_fire(
+                EVENT_MESSAGE,
+                {
+                    "endpoint": endpoint,
+                    "id": message[3],
+                    "sender": message[0],
+                    "app": message[1],
+                    "content": message[2],
+                    "is_new": True,
+                },
+            )
         return True
 
     @callback

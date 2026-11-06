@@ -39,3 +39,9 @@ NBOX_PRODUCT_ID = 0x8001
 # --- sensors -----------------------------------------------------------------
 PART_NAMES = ("Sender", "App", "Content")
 WAITING = "Waiting for data..."
+
+# --- notification ID / events ---------------------------------------------------
+# Fired once per new notification (new ID). Data: endpoint, id, sender, app, content, is_new.
+EVENT_MESSAGE = "nbox_matter_message"
+# Option per LED channel: "Process LED n messages" (default on). Off = no events from it.
+PROCESS_LED_KEYS = {ep: f"process_led{ep}" for ep in LED_ENDPOINTS}

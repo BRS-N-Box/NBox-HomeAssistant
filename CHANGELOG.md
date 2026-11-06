@@ -1,5 +1,23 @@
 # Changelog
 
+## 3.1.0
+### Added
+- **`nbox_matter_message` event: announce each notification once.** The N-Box (new firmware + Android app) publishes
+  a notification ID as the Matter `messageID` (8 raw bytes). The integration remembers the last 200 IDs per LED
+  channel (persisted in `.storage/nbox_matter_<entry_id>_seen_ids`) and fires one event
+  (`endpoint`, `id`, `sender`, `app`, `content`, `is_new`) for each ID it has not seen. A phone that reconnects and
+  re-sends the same notifications no longer causes repeated announcements; the same text with a new ID is announced.
+- Messages already present at start-up (or on a new node) are learned silently, so a restart announces nothing.
+- Options **Process LED 1-4 messages** (default on) to switch the events off per channel.
+- Extra attribute `message_id` on the sensors (no new entities; entity ids and unique ids unchanged).
+- Debug log `[NBOX] EPn id=... new=True/False` and the raw Messages value.
+- Unit tests (`tests/`).
+
+### Unchanged
+- A message without ID (older firmware, iOS: the legacy constant `"1"`) fires no event and behaves exactly as before.
+- The `sender|app|content` format and all sensors.
+
+
 ## 3.0.2
 - The repository moved to the **BRS-N-Box** GitHub organization; documentation and issue links updated. If HACS
   cannot find the repository any more, remove the old custom repository and add `https://github.com/BRS-N-Box/NBox-HomeAssistant`.
