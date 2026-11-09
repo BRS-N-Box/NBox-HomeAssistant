@@ -97,13 +97,16 @@ the N-Box's Matter device.
 
 ## How it finds and follows the N-Box
 
-1. It looks through the Matter nodes for one that **is** an N-Box: vendor `BRS-L`, product `N-Box` (or the
-   vendor/product ids `0xFFF2`/`0x8001`; as a fallback, a node publishing the Messages cluster on several endpoints).
+1. It looks through the Matter nodes for one that **is** an N-Box, recognised by its product name `N-Box`. If the
+   product name cannot be read yet, a node publishing the Messages cluster on several endpoints is used. Any other
+   Matter device is ignored, including other devices that happen to share the manufacturer name or ids.
 2. It subscribes to that node's *Messages* attribute on endpoints 1–4 and reads the current values.
 3. It also listens for Matter nodes being added, updated or removed. If the N-Box is removed and paired again, the
    integration picks the new node, resubscribes, re-reads all channels, moves any light that an older version
    had pulled into its devices back to Matter, and (unless switched off) removes the leftovers of the old node.
-4. A safety re-read runs every minute.
+4. If Home Assistant's Matter integration is reloaded, the integration re-attaches to the new Matter connection by
+   itself and keeps updating.
+5. A safety re-read runs every minute.
 
 If more than one N-Box is paired, the available one is used, preferring the newest — or pin one in *Configure*.
 

@@ -1,5 +1,13 @@
 # Changelog
 
+## 3.1.1
+### Fixed
+- **Improved compatibility with other Matter devices.** The N-Box is now recognised by its product name only.
+  Other Matter devices, including devices that share the manufacturer name or the vendor/product ids, are no
+  longer mistaken for an N-Box.
+- **Keeps working after Home Assistant's Matter integration is reloaded.** The integration now follows the current
+  Matter connection and re-attaches its subscriptions, so the sensors no longer stop updating after a reload.
+
 ## 3.1.0
 ### Added
 - **`nbox_matter_message` event: announce each notification once.** The N-Box (new firmware + Android app) publishes

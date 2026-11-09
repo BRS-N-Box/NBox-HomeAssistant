@@ -95,12 +95,17 @@ def is_nbox_node(node: Any) -> bool:
     """True when this Matter node is an N-Box."""
     vendor = _node_attr(node, 0, BASIC_INFORMATION_CLUSTER_ID, ATTR_VENDOR_NAME)
     product = _node_attr(node, 0, BASIC_INFORMATION_CLUSTER_ID, ATTR_PRODUCT_NAME)
-    if vendor == NBOX_VENDOR_NAME or product == NBOX_PRODUCT_NAME:
+    if product == NBOX_PRODUCT_NAME:
         return True
-    vid = _node_attr(node, 0, BASIC_INFORMATION_CLUSTER_ID, ATTR_VENDOR_ID)
-    pid = _node_attr(node, 0, BASIC_INFORMATION_CLUSTER_ID, ATTR_PRODUCT_ID)
-    if vid == NBOX_VENDOR_ID and pid == NBOX_PRODUCT_ID:
-        return True
+    # Other devices from the same manufacturer can share the vendor name and the
+    # vendor/product IDs and differ only in the product name, so a readable product
+    # name that is not "N-Box" means: not an N-Box.
+    if isinstance(product, str) and product.strip():
+        return False
+    # Product name unreadable (half-initialised node). Do NOT trust the vendor name or the
+    # vendor/product IDs here: other devices may share them. Only the N-Box publishes
+    # the Messages cluster on several LED endpoints, so decide on that alone.
+    # A node that is not ready yet simply does not match until a later refresh.
     # Fallback: a node that publishes the Messages cluster on several LED endpoints
     paths = _raw_attribute_paths(node)
     with_messages = {
@@ -349,8 +354,25 @@ class NBoxManager:
         return max(pool, key=lambda n: n.node_id)  # newest pairing
 
     async def _async_rediscover(self, reason: str) -> None:
+        if self._stopped:
+            return
+        # Home Assistant's Matter integration creates a NEW client when it reloads. Keep
+        # following the current one, otherwise the subscriptions and re-reads below stay
+        # attached to the old client and the sensors silently stop updating.
+        current = get_matter_client(self.hass)
+        if current is not None and current is not self._client:
+            _LOGGER.info("[NBOX] The Matter client was replaced (%s): re-attaching", reason)
+            self._unsubscribe_all()
+            self._client = current
+            event_type = _event_types()
+            if event_type is not None:
+                for event in (event_type.NODE_ADDED, event_type.NODE_UPDATED, event_type.NODE_REMOVED):
+                    self._unsub_node_events.append(
+                        current.subscribe_events(self._handle_node_event, event_filter=event)
+                    )
+            self.node_id = None  # force a fresh subscription and a silent first read
         client = self._client
-        if client is None or self._stopped:
+        if client is None:
             return
         node = self._choose(find_nbox_nodes(client))
         previous = self.node_id
