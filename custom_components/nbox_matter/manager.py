@@ -68,7 +68,8 @@ _RETRY_SECONDS = 30
 _DEBOUNCE_SECONDS = 2
 _REFRESH_SECONDS = 60  # safety net: re-read everything now and then
 _REFRESH_SECONDS_NO_EVENTS = 15  # when the event subscription is not available
-_SAVE_SEEN_DELAY = 10  # seconds: debounce for saving the seen notification IDs
+_BURST_SECONDS = 1.5  # messages arriving closer together than this: only the last fires
+_SAVE_SEEN_DELAY = 10 # seconds: debounce for saving the seen notification IDs
 
 
 # ---------------------------------------------------------------------------
@@ -186,6 +187,8 @@ class NBoxManager:
         self._seen = SeenIds()
         # The first read after a start / node switch only learns the IDs (no events)
         self._silent_read = True
+        self._pending_events: dict[int, dict[str, Any]] = {}
+        self._cancel_fire: dict[int, Any] = {}
 
     # -- what the sensors read ---------------------------------------------
     @property
@@ -236,6 +239,10 @@ class NBoxManager:
             if cancel:
                 cancel()
         self._cancel_retry = self._cancel_refresh = None
+        for cancel in self._cancel_fire.values():
+            cancel()
+        self._cancel_fire = {}
+        self._pending_events = {}
         self._unsubscribe_all()
         await self._seen_store.async_save(self._seen.to_dict())  # flush the debounced save
 
@@ -478,8 +485,8 @@ class NBoxManager:
         if dispatch:
             self._dispatch()  # sensors first, so an automation reads current values
         if fire:
-            self.hass.bus.async_fire(
-                EVENT_MESSAGE,
+            self._queue_event(
+                endpoint,
                 {
                     "endpoint": endpoint,
                     "id": message[3],
@@ -490,6 +497,26 @@ class NBoxManager:
                 },
             )
         return True
+
+    def _queue_event(self, endpoint: int, data: dict[str, Any]) -> None:
+        """Fire the event after a short quiet period; only the last message of a burst fires.
+
+        The phone re-posts its pending notifications in a burst when a new one arrives
+        (the newest last), which would otherwise announce old messages first.
+        """
+        self._pending_events[endpoint] = data
+        cancel = self._cancel_fire.pop(endpoint, None)
+        if cancel:
+            cancel()
+
+        @callback
+        def _fire(_now: Any) -> None:
+            self._cancel_fire.pop(endpoint, None)
+            pending = self._pending_events.pop(endpoint, None)
+            if pending is not None and not self._stopped:
+                self.hass.bus.async_fire(EVENT_MESSAGE, pending)
+
+        self._cancel_fire[endpoint] = async_call_later(self.hass, _BURST_SECONDS, _fire)
 
     @callback
     def _dispatch(self) -> None:

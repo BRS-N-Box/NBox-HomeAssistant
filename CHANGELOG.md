@@ -1,5 +1,12 @@
 # Changelog
 
+## 3.2.0
+### Added
+- **Burst filter for the `nbox_matter_message` event.** When several new notifications arrive on the same LED
+  within 1.5 s (a phone re-posting its pending notifications when another one arrives), only the last one fires
+  the event. The sensors still update for every message. Only notifications with a new ID are affected.
+
+
 ## 3.1.1
 ### Fixed
 - **Improved compatibility with other Matter devices.** The N-Box is now recognised by its product name only.
