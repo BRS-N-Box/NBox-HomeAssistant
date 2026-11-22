@@ -14,10 +14,12 @@
     "step": {
       "init": {
         "title": "N-Box Matter options",
-        "description": "{status}\n\nLeave the node number at 0 to detect the N-Box automatically.",
+        "description": "{status}\n\nLeave the node number at 0 to detect the N-Box automatically.\n\nCooldown period: after a message from an app and sender fired an event, further messages from the same app and sender fire no event for this many seconds. The sensors still update.\n\nBurst window: new messages on one LED that arrive closer together than this are collapsed into the last one. A safety net against flooding; leave it at 0 if your announcement queue handles it.",
         "data": {
           "node_id": "Matter node number (0 = automatic)",
           "auto_cleanup": "Remove leftover entities of N-Box nodes that were removed",
+          "cooldown_seconds": "Cooldown period in seconds (0 = off)",
+          "burst_seconds": "Burst window in seconds (0 = off)",
           "process_led1": "Process LED 1 messages (fire nbox_matter_message events)",
           "process_led2": "Process LED 2 messages (fire nbox_matter_message events)",
           "process_led3": "Process LED 3 messages (fire nbox_matter_message events)",

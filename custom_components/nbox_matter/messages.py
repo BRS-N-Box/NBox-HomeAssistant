@@ -170,6 +170,33 @@ class SeenIds:
         return seen
 
 
+class Cooldown:
+    """Per app + sender: after one event fired, no further event for ``seconds``.
+
+    The window starts at the message that fired and is NOT renewed by the messages it
+    suppresses, so a chatty sender is heard again once ``seconds`` have passed.
+    """
+
+    def __init__(self) -> None:
+        self._fired: dict[tuple[str, str], float] = {}
+
+    @staticmethod
+    def key(message: Message) -> tuple[str, str]:
+        return message[1].strip().lower(), message[0].strip().lower()
+
+    def allow(self, message: Message, now: float, seconds: float) -> bool:
+        """True when an event may fire now (and starts the cooldown); False = suppressed."""
+        if seconds <= 0:
+            return True
+        key = self.key(message)
+        last = self._fired.get(key)
+        if last is not None and 0 <= now - last < seconds:
+            return False
+        self._fired = {k: t for k, t in self._fired.items() if 0 <= now - t < seconds}
+        self._fired[key] = now
+        return True
+
+
 def decide_event(
     seen: SeenIds,
     endpoint: int,

@@ -206,3 +206,28 @@ def test_same_id_on_two_endpoints_is_independent():
     seen = m.SeenIds()
     assert m.decide_event(seen, 1, msg()) is True
     assert m.decide_event(seen, 2, msg()) is True
+
+
+# --- cooldown ------------------------------------------------------------------
+def test_cooldown_window_starts_at_fired_message_and_is_not_renewed():
+    cd = m.Cooldown()
+    anna = ("Anna", "WhatsApp", "Hi", HEX)
+    assert cd.allow(anna, 0, 10) is True
+    assert cd.allow(anna, 4, 10) is False   # skipped, does not extend the window
+    assert cd.allow(anna, 10, 10) is True   # window from 0 s is over
+    assert cd.allow(anna, 12, 10) is False  # new window started at 10 s
+
+
+def test_cooldown_is_per_app_and_sender_case_insensitive():
+    cd = m.Cooldown()
+    assert cd.allow(("Anna", "WhatsApp", "a", HEX), 0, 10) is True
+    assert cd.allow(("anna ", "whatsapp", "b", HEX), 1, 10) is False
+    assert cd.allow(("Bob", "WhatsApp", "c", HEX), 1, 10) is True
+    assert cd.allow(("Anna", "Gmail", "d", HEX), 1, 10) is True
+
+
+def test_cooldown_zero_is_off():
+    cd = m.Cooldown()
+    anna = ("Anna", "WhatsApp", "Hi", HEX)
+    assert cd.allow(anna, 0, 0) is True
+    assert cd.allow(anna, 0.1, 0) is True

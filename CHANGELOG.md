@@ -1,5 +1,17 @@
 # Changelog
 
+## 3.3.0
+### Added
+- **Option "Cooldown period"** (default 10 s, `0` = off). After a message from an app and sender fired a
+  `nbox_matter_message` event, further messages from the same app and sender fire no event for that many seconds.
+  The window starts at the message that fired and is not extended by the skipped ones. The sensors still update and
+  the IDs of skipped messages are remembered.
+- **Option "Burst window"** (default 0 s = off). New messages on one LED that arrive closer together than the window
+  are collapsed into the last one. A safety net against flooding; spacing of spoken announcements belongs in the
+  automation's own queue.
+### Changed
+- 3.2.0 had a fixed 1.5 s burst filter that was always on. It is now this optional setting and off by default.
+
 ## 3.2.0
 ### Added
 - **Burst filter for the `nbox_matter_message` event.** When several new notifications arrive on the same LED

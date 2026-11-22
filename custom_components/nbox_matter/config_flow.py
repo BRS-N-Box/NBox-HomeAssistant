@@ -10,11 +10,20 @@ import logging
 import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.core import callback
+from homeassistant.helpers.selector import (
+    NumberSelector,
+    NumberSelectorConfig,
+    NumberSelectorMode,
+)
 
 from .const import (
     CONF_AUTO_CLEANUP,
+    CONF_BURST,
+    CONF_COOLDOWN,
     CONF_NODE_ID,
     DEFAULT_AUTO_CLEANUP,
+    DEFAULT_BURST,
+    DEFAULT_COOLDOWN,
     DOMAIN,
     LED_ENDPOINTS,
     PROCESS_LED_KEYS,
@@ -22,6 +31,14 @@ from .const import (
 from .manager import find_nbox_nodes, get_matter_client
 
 _LOGGER = logging.getLogger(__name__)
+
+
+def _seconds_selector() -> NumberSelector:
+    return NumberSelector(
+        NumberSelectorConfig(
+            min=0, max=600, step=0.5, unit_of_measurement="s", mode=NumberSelectorMode.BOX
+        )
+    )
 
 
 def _detect_text(hass) -> str:
@@ -75,6 +92,12 @@ class NBoxOptionsFlow(config_entries.OptionsFlow):
                     CONF_AUTO_CLEANUP,
                     default=options.get(CONF_AUTO_CLEANUP, DEFAULT_AUTO_CLEANUP),
                 ): bool,
+                vol.Optional(
+                    CONF_COOLDOWN, default=options.get(CONF_COOLDOWN, DEFAULT_COOLDOWN)
+                ): _seconds_selector(),
+                vol.Optional(
+                    CONF_BURST, default=options.get(CONF_BURST, DEFAULT_BURST)
+                ): _seconds_selector(),
                 **{
                     vol.Optional(
                         PROCESS_LED_KEYS[ep], default=options.get(PROCESS_LED_KEYS[ep], True)

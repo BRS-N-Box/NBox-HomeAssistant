@@ -93,6 +93,8 @@ the N-Box's Matter device.
 |---|---|
 | **Matter node number** | `0` = detect automatically (recommended). Set a number only if you own several N-Boxes and want to pin one. |
 | **Auto cleanup** | On by default. Removes the leftover entities (and empty devices) of N-Box nodes that no longer exist after a re-pairing. Only nodes this integration recognised as an N-Box are ever touched. |
+| **Cooldown period** | `10` seconds by default, `0` = off. After a message from an app and sender fired an event, further messages from the **same app and sender** fire no event for this many seconds (the sensors still update). See [Cooldown and burst window](#cooldown-and-burst-window). |
+| **Burst window** | `0` (off) by default. New messages on one LED that arrive closer together than this many seconds are collapsed: only the last one fires. A safety net against flooding. See [Cooldown and burst window](#cooldown-and-burst-window). |
 | **Process LED 1-4 messages** | On by default. Switch a channel off and it fires no `nbox_matter_message` events (its sensors still update). |
 
 ## How it finds and follows the N-Box
@@ -174,7 +176,27 @@ What does **not** fire an event:
 | A channel switched off with *Process LED n messages* | no - the sensors still update |
 
 Notifications that arrive while Home Assistant is down are therefore never announced afterwards (they are treated as
-history). The same text from the same sender **does** fire again, because it has a new ID.
+history). The same text from the same sender **does** fire again, because it has a new ID, unless the sender is
+still in the cooldown period (next section).
+
+### Cooldown and burst window
+
+Two optional settings in *Configure* limit how many events fire. Both only decide whether the **event** fires;
+the sensors always show every message, and every message ID is remembered either way (a skipped message is never
+announced later).
+
+| Setting | What it does | Default |
+|---|---|---|
+| **Cooldown period** | Per **app + sender**. A message fires an event and starts the cooldown. Every further message from the same app and the same sender is skipped until the cooldown has passed. The window starts at the message that fired and is **not** extended by the skipped ones, so someone who keeps writing is heard again after the period. Other senders and other apps are not affected. Senders are compared without regard to upper or lower case. A message without a sender (`Unknown`) counts as one sender per app. | 10 s (`0` = off) |
+| **Burst window** | Per **LED channel**. New messages that arrive closer together than the window are collapsed into the last one, which fires after the window. Use it to protect a slow automation from a flood. It delays every event by the window, so it is off by default. | 0 s (off) |
+
+Example with a cooldown of 10 s: Anna writes at 0 s, 4 s, 12 s and 25 s on WhatsApp. The message at 0 s fires and
+starts the cooldown. The one at 4 s is skipped. The one at 12 s fires, because the cooldown from 0 s ended at 10 s
+(the skipped 4 s message did not extend it) and it starts a new cooldown. The one at 25 s fires too.
+
+The **gap between announcements** is not handled here. The integration only fires events. Spacing and ordering of
+spoken announcements belong in the automation or script that speaks them, for example a script in `queued` mode that
+speaks one message at a time (the example automation above uses `mode: queued`).
 
 Use the data **of the event** (not the sensors) in your automation: it is exactly the message that fired. Use
 `mode: queued` so that two new messages in a row are announced one after the other.

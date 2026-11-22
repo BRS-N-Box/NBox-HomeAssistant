@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from collections import Counter
 from functools import partial
 from typing import Any
@@ -34,12 +35,16 @@ from .const import (
     ATTR_VENDOR_NAME,
     BASIC_INFORMATION_CLUSTER_ID,
     CONF_AUTO_CLEANUP,
+    CONF_BURST,
+    CONF_COOLDOWN,
     CONF_NODE_ID,
     CONF_TRIGGER_LED1,
     CONF_TRIGGER_LED2,
     CONF_TRIGGER_LED3,
     CONF_TRIGGER_LED4,
     DEFAULT_AUTO_CLEANUP,
+    DEFAULT_BURST,
+    DEFAULT_COOLDOWN,
     DOMAIN,
     LED_ENDPOINTS,
     MESSAGES_ATTRIBUTE_ID,
@@ -53,6 +58,7 @@ from .const import (
     WAITING,
 )
 from .messages import (  # noqa: F401 - parse_* re-exported
+    Cooldown,
     Message,
     SeenIds,
     decide_event,
@@ -68,7 +74,6 @@ _RETRY_SECONDS = 30
 _DEBOUNCE_SECONDS = 2
 _REFRESH_SECONDS = 60  # safety net: re-read everything now and then
 _REFRESH_SECONDS_NO_EVENTS = 15  # when the event subscription is not available
-_BURST_SECONDS = 1.5  # messages arriving closer together than this: only the last fires
 _SAVE_SEEN_DELAY = 10 # seconds: debounce for saving the seen notification IDs
 
 
@@ -187,6 +192,7 @@ class NBoxManager:
         self._seen = SeenIds()
         # The first read after a start / node switch only learns the IDs (no events)
         self._silent_read = True
+        self._cooldown = Cooldown()
         self._pending_events: dict[int, dict[str, Any]] = {}
         self._cancel_fire: dict[int, Any] = {}
 
@@ -498,12 +504,34 @@ class NBoxManager:
             )
         return True
 
-    def _queue_event(self, endpoint: int, data: dict[str, Any]) -> None:
-        """Fire the event after a short quiet period; only the last message of a burst fires.
+    def _option_seconds(self, key: str, default: float) -> float:
+        try:
+            return max(0.0, float(self.entry.options.get(key, default)))
+        except (TypeError, ValueError):
+            return default
 
-        The phone re-posts its pending notifications in a burst when a new one arrives
-        (the newest last), which would otherwise announce old messages first.
+    def _emit(self, data: dict[str, Any]) -> None:
+        """Fire the event unless the app + sender is still in its cooldown."""
+        message: Message = (data["sender"], data["app"], data["content"], data["id"])
+        cooldown = self._option_seconds(CONF_COOLDOWN, DEFAULT_COOLDOWN)
+        if not self._cooldown.allow(message, time.monotonic(), cooldown):
+            _LOGGER.debug(
+                "[NBOX] EP%s id=%s not announced: %r from %r is in its %s s cooldown",
+                data["endpoint"], data["id"], data["app"], data["sender"], cooldown,
+            )
+            return
+        self.hass.bus.async_fire(EVENT_MESSAGE, data)
+
+    def _queue_event(self, endpoint: int, data: dict[str, Any]) -> None:
+        """Fire the event, after the optional burst window.
+
+        With a burst window above 0, new messages on one LED that arrive closer together than
+        the window are collapsed: only the last one fires. 0 (default) = every message fires.
         """
+        burst = self._option_seconds(CONF_BURST, DEFAULT_BURST)
+        if burst <= 0:
+            self._emit(data)
+            return
         self._pending_events[endpoint] = data
         cancel = self._cancel_fire.pop(endpoint, None)
         if cancel:
@@ -514,9 +542,9 @@ class NBoxManager:
             self._cancel_fire.pop(endpoint, None)
             pending = self._pending_events.pop(endpoint, None)
             if pending is not None and not self._stopped:
-                self.hass.bus.async_fire(EVENT_MESSAGE, pending)
+                self._emit(pending)
 
-        self._cancel_fire[endpoint] = async_call_later(self.hass, _BURST_SECONDS, _fire)
+        self._cancel_fire[endpoint] = async_call_later(self.hass, burst, _fire)
 
     @callback
     def _dispatch(self) -> None:

@@ -43,5 +43,13 @@ WAITING = "Waiting for data..."
 # --- notification ID / events ---------------------------------------------------
 # Fired once per new notification (new ID). Data: endpoint, id, sender, app, content, is_new.
 EVENT_MESSAGE = "nbox_matter_message"
+# Option "Cooldown period" (seconds, 0 = off): after a message of an app + sender fired an
+# event, further messages of the same app + sender fire no event for this long.
+CONF_COOLDOWN = "cooldown_seconds"
+DEFAULT_COOLDOWN = 10.0
+# Option "Burst window" (seconds, 0 = off): new messages on one LED that arrive closer together
+# than this are collapsed into the last one. A safety net against flooding, off by default.
+CONF_BURST = "burst_seconds"
+DEFAULT_BURST = 0.0
 # Option per LED channel: "Process LED n messages" (default on). Off = no events from it.
 PROCESS_LED_KEYS = {ep: f"process_led{ep}" for ep in LED_ENDPOINTS}
